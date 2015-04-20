@@ -51,13 +51,13 @@ class Amex
     @ua.link(id: "date-layer-link").click
     @ua.link(text: "Date range").click
     #puts "from: #{start_date}"
-    @ua.div(id: "from-datepicker").select_list(class: "ui-datepicker-year").select(start_date.strftime("%Y"))
-    @ua.div(id: "from-datepicker").select_list(class: "ui-datepicker-month").select_value(start_date.strftime("%-m").to_i - 1)
-    @ua.div(id: "from-datepicker").link(text: start_date.strftime("%-d")).click
+    @ua.div(id: "from-datepicker").select_list(class: "ui-datepicker-year").select(Date.parse(start_date).strftime("%Y"))
+    @ua.div(id: "from-datepicker").select_list(class: "ui-datepicker-month").select_value(Date.parse(start_date).strftime("%-m").to_i - 1)
+    @ua.div(id: "from-datepicker").link(text: Date.parse(start_date).strftime("%-d")).click
     #puts "to: #{end_date}"
-    @ua.div(id: "to-datepicker").select_list(class: "ui-datepicker-year").select(end_date.strftime("%Y"))
-    @ua.div(id: "to-datepicker").select_list(class: "ui-datepicker-month").select_value(end_date.strftime("%-m").to_i - 1)
-    @ua.div(id: "to-datepicker").link(text: end_date.strftime("%-d")).click
+    @ua.div(id: "to-datepicker").select_list(class: "ui-datepicker-year").select(Date.parse(end_date).strftime("%Y"))
+    @ua.div(id: "to-datepicker").select_list(class: "ui-datepicker-month").select_value(Date.parse(end_date).strftime("%-m").to_i - 1)
+    @ua.div(id: "to-datepicker").link(text: Date.parse(end_date).strftime("%-d")).click
 
     @ua.link(id: "date-go-button").click
 
@@ -67,7 +67,10 @@ class Amex
 
     until prev_cp == cp
       text += @ua.table(id: "statement-data-table").tbody.text.split(/\n/)
-      @ua.link(id: "statement-data-table_next").click
+      #ap @ua.link(id: "statement-data-table_next").methods
+      if @ua.link(id: "statement-data-table_next").visible?
+        @ua.link(id: "statement-data-table_next").click
+      end
       prev_cp = cp
       cp = @ua.div(id: "statement-data-table_info").text
     end
@@ -99,6 +102,7 @@ Amex.new.tap do |am|
     # TODO document and usage
     transactions = am.transactions(ARGV[0], ARGV[1], ARGV[2])
     ap transactions
+    ap transactions.count
   ensure
     am.close
   end
