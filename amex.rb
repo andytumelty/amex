@@ -1,4 +1,5 @@
 require 'watir'
+require 'headless'
 require 'highline/import'
 require 'yaml'
 require 'date'
@@ -33,11 +34,14 @@ end
 
 class Amex
   def initialize
+    @headless = Headless.new
+    @headless.start
     @ua = Watir::Browser.start("https://www.americanexpress.com/uk")
   end
 
   def close
     @ua.close
+    @headless.destroy
   end
   
   def login(credentials)
