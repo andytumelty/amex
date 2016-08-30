@@ -27,6 +27,8 @@ class Amex
   end
 
   def transactions(start_date, end_date, account)
+    # TODO: check start_date, end_date and account are populated and expected
+    # data types
     @ua.link(text: "Your Statement").click
 
     # TODO: more reliable way of doing this?
