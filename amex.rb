@@ -1,50 +1,26 @@
 require 'watir'
-require 'headless'
-require 'highline/import'
-require 'yaml'
 require 'date'
-require 'ap'
-
-def credential_load
-  config = File.expand_path("~/.amex.yaml")
-
-  if File.exists?(config)
-    if File.world_readable?(config) or not File.owned?(config)
-      mode = File.stat(config).mode.to_s(8)
-      $stderr.puts "#{config}: Insecure permissions: #{mode}"
-    end
-  end
-
-  credentials = YAML.load(File.read(config)) rescue {}
-
-  ['username', 'password'].each do |credential|
-    key = credential.tr(' ','_').downcase.to_sym
-    next if credentials.key?(key)
-    unless $stdin.tty? and $stdout.tty?
-      $stderr.puts "Can't prompt for credentials; STDIN or STDOUT is not a TTY"
-      exit(1)
-    end
-    credentials[key] = ask("Please enter your #{credential}:") do |q|
-      q.echo = "*"
-    end
-  end
-
-  return credentials
-end
+require 'headless'
 
 class Amex
   def initialize
     @headless = Headless.new
     @headless.start
-    @ua = Watir::Browser.start("https://www.americanexpress.com/uk")
+    @ua = Watir::Browser.new()
+    @ua.goto("https://www.americanexpress.com/uk")
   end
 
   def close
     @ua.close
     @headless.destroy
   end
-  
+
   def login(credentials)
+    if @ua.button(id: "sprite-ContinueButton_EN").exists?
+      if @ua.button(id: "sprite-ContinueButton_EN").visible?
+        @ua.button(id: "sprite-ContinueButton_EN").click
+      end
+    end
     @ua.text_field(name: "UserID").set(credentials[:username])
     @ua.text_field(name: "Password").set(credentials[:password])
     @ua.form(id: 'ssoform').submit
@@ -52,62 +28,56 @@ class Amex
 
   def transactions(start_date, end_date, account)
     @ua.link(text: "Your Statement").click
-    @ua.link(id: "date-layer-link").click
-    @ua.link(text: "Date range").click
-    #puts "from: #{start_date}"
-    @ua.div(id: "from-datepicker").select_list(class: "ui-datepicker-year").select(Date.parse(start_date).strftime("%Y"))
-    @ua.div(id: "from-datepicker").select_list(class: "ui-datepicker-month").select_value(Date.parse(start_date).strftime("%-m").to_i - 1)
-    @ua.div(id: "from-datepicker").link(text: Date.parse(start_date).strftime("%-d")).click
-    #puts "to: #{end_date}"
-    @ua.div(id: "to-datepicker").select_list(class: "ui-datepicker-year").select(Date.parse(end_date).strftime("%Y"))
-    @ua.div(id: "to-datepicker").select_list(class: "ui-datepicker-month").select_value(Date.parse(end_date).strftime("%-m").to_i - 1)
-    @ua.div(id: "to-datepicker").link(text: Date.parse(end_date).strftime("%-d")).click
 
-    @ua.link(id: "date-go-button").click
+    # TODO: more reliable way of doing this?
+    sleep 2
 
-    cp = @ua.div(id: "statement-data-table_info").text
-    prev_cp = ''
-    text = []
-
-    until prev_cp == cp
-      text += @ua.table(id: "statement-data-table").tbody.text.split(/\n/)
-      #ap @ua.link(id: "statement-data-table_next").methods
-      if @ua.link(id: "statement-data-table_next").visible?
-        @ua.link(id: "statement-data-table_next").click
-      end
-      prev_cp = cp
-      cp = @ua.div(id: "statement-data-table_info").text
+    if @ua.span(class: "interstitial-message").visible?
+      @ua.link(class: "close-interstitial").click
     end
+
+    @ua.div(id: "daterange").click
+    @ua.div(title: "Select start and end dates").click
+
+    [start_date, end_date].each do |date|
+      @ua.th(class: "months").button().click
+      while @ua.strong(class: "uib").text.to_i > Date.parse(date).year
+        # max clicks?
+        @ua.button(class: "pull-left").click
+      end
+      @ua.button(title: Date.parse(date).strftime("%B")).click
+      @ua.span(text: Date.parse(date).strftime("%d")).click
+    end
+
+    @ua.button(class: "action_button").click
+
+    if @ua.button(title: "Show more transactions").exists?
+      while @ua.button(title: "Show more transactions").visible?
+        @ua.button(title: "Show more transactions").click
+      end
+    end
+
+    n = 0
+    while (! @ua.table(id: "transaction-table").exists? ) && n < 3
+      sleep 1
+      n += 1
+    end
+
+    text = @ua.table(id: "transaction-table").tbody.text.split(/\n/)
 
     i = 0
     transactions = []
     while i*3 < text.size do
+      #puts text[i*3]
       transaction = {}
       transaction[:date] = Date.parse(text[i*3])
       transaction[:description] = text[i*3 + 1]
       # TODO parse different currencies
-      transaction[:amount] = text[i*3 + 2].split(/ /).last.tr('£','').to_f
+      transaction[:amount] = text[i*3 + 2].split(/ /).last.gsub(/[£,]/,'').to_f
       transactions << transaction
       i = i + 1
     end
 
     return transactions
-  end
-end
-
-
-credentials = credential_load
-
-Amex.new.tap do |am| 
-  begin
-    am.login(credentials)
-    # TODO make account selection actually do something
-    # TODO quick summary
-    # TODO document and usage
-    transactions = am.transactions(ARGV[0], ARGV[1], ARGV[2])
-    ap transactions
-    ap transactions.count
-  ensure
-    am.close
   end
 end
