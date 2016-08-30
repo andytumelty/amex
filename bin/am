@@ -62,5 +62,5 @@ else
       (so can be any format parsable by Date.parse), account is the 4 last digits
       credit card number.
   For more information see the README:
-  https://github.com/laycat/amex/blob/master/README.markdown"
+  https://github.com/laycat/amex/blob/master/README.md"
 end
